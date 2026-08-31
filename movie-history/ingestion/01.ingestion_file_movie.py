@@ -1,11 +1,15 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC ##Ingesta del archivo movie.csv
 
 # COMMAND ----------
 
 # DBTITLE 1,Widget p_environment
-dbutils.widgets.text("p_environment","")
+dbutils.widgets.text("p_environment","production")
 
 # COMMAND ----------
 
@@ -59,7 +63,7 @@ movie_df = spark.read \
     .schema(movie_schema) \
     .csv(f"{bronze_folder_path}/movie.csv", nullValue="Hyukjin Kwon")
 
-#display(movie_df.limit(5))
+display(movie_df.limit(5))
 
 # COMMAND ----------
 
