@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC #### Leer todos los datos que son requeridos
 
@@ -135,10 +139,24 @@ results_order_by_dataframe = results_df.orderBy("release_date",desc=True)
 
 # COMMAND ----------
 
+# DBTITLE 1,como archivo parquet
 results_order_by_dataframe.write \
     .mode("overwrite") \
     .parquet(f"{gold_folder_path}/results_movie_genre_language")
 
+
+# COMMAND ----------
+
+# DBTITLE 1,como tabla delta
+results_order_by_dataframe.write \
+    .mode("overwrite") \
+    .format("delta") \
+    .saveAsTable(f"{catalogo}.{schema_gold}.results_movie_genre_language")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from moviehistory.movie_silver.results_movie_genre_language
 
 # COMMAND ----------
 

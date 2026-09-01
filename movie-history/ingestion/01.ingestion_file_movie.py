@@ -9,7 +9,7 @@
 # COMMAND ----------
 
 # DBTITLE 1,Widget p_environment
-dbutils.widgets.text("p_environment","production")
+dbutils.widgets.text("p_environment","")
 
 # COMMAND ----------
 
@@ -63,7 +63,7 @@ movie_df = spark.read \
     .schema(movie_schema) \
     .csv(f"{bronze_folder_path}/movie.csv", nullValue="Hyukjin Kwon")
 
-display(movie_df.limit(5))
+#display(movie_df.limit(5))
 
 # COMMAND ----------
 
@@ -171,6 +171,19 @@ movies_final_df.write \
 
 df = spark.read.parquet(f"{silver_folder_path}/movies")
 display(df.limit(5))
+
+# COMMAND ----------
+
+movies_final_df.write \
+    .mode("overwrite") \
+    .format("delta") \
+    .saveAsTable(f"{catalogo}.{schema_silver}.movies")
+
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from moviehistory.movie_silver.movies
 
 # COMMAND ----------
 

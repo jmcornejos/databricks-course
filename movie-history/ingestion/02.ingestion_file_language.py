@@ -1,6 +1,14 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "2"
+# ///
 # MAGIC %md
 # MAGIC ##Ingesta del archivo language.csv
+
+# COMMAND ----------
+
+# MAGIC %run "../includes/configuration"
 
 # COMMAND ----------
 
@@ -41,7 +49,7 @@ languages_schema = StructType([
 languages_df = spark.read \
     .option("header", True) \
     .schema(languages_schema) \
-    .csv("abfss://bronze@moviehistory2.dfs.core.windows.net/language.csv", nullValue="Hyukjin Kwon")
+    .csv(f"{bronze_folder_path}/language.csv", nullValue="Hyukjin Kwon")
 
 display(languages_df.limit(5))
 
@@ -125,7 +133,7 @@ languages_final_df = languages_renamed_df \
     .withColumn("environment", lit(v_environment))
 
 
-display(languages_final_df.limit(5))
+#display(languages_final_df.limit(5))
 
 # COMMAND ----------
 
@@ -142,19 +150,21 @@ display(languages_final_df.limit(5))
 
 # COMMAND ----------
 
-languages_final_df.write.mode("overwrite").parquet("abfss://silver@moviehistory2.dfs.core.windows.net/languages")
-
-
-
-# COMMAND ----------
-
-# MAGIC %fs
-# MAGIC ls abfss://silver@moviehistory2.dfs.core.windows.net/languages
+languages_final_df.write \
+    .mode("overwrite") \
+    .parquet(f"{silver_folder_path}/languages")
 
 # COMMAND ----------
 
-df = spark.read.parquet("abfss://silver@moviehistory2.dfs.core.windows.net/languages")
-display(df.limit(5))
+languages_final_df.write \
+    .mode("overwrite") \
+    .format("delta") \
+    .saveAsTable(f"{catalogo}.{schema_silver}.languages")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from moviehistory.movie_silver.languages limit 10
 
 # COMMAND ----------
 
