@@ -1,5 +1,5 @@
 # Databricks notebook source
-bronze_folder_path = "/Volumes/moviehistory/movie_bronze/vol_bronze"
+bronze_folder_path = "/Volumes/moviehistory/movie_bronze/vol_incremental"
 silver_folder_path = "/Volumes/moviehistory/movie_silver/vol_silver"
 gold_folder_path = "/Volumes/moviehistory/movie_gold/vol_gold"
 catalogo = "moviehistory"

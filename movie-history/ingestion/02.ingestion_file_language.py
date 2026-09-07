@@ -14,12 +14,14 @@
 
 # DBTITLE 1,Widget p_environment
 dbutils.widgets.text("p_environment","production")
+v_environment = dbutils.widgets.get("p_environment")
 
 
 # COMMAND ----------
 
-# DBTITLE 1,Get p_environment
-v_environment = dbutils.widgets.get("p_environment")
+# DBTITLE 1,Widget fecha
+dbutils.widgets.text("p_file_date","2024-12-16")
+v_file_date = dbutils.widgets.get("p_file_date")
 
 # COMMAND ----------
 
@@ -49,7 +51,7 @@ languages_schema = StructType([
 languages_df = spark.read \
     .option("header", True) \
     .schema(languages_schema) \
-    .csv(f"{bronze_folder_path}/language.csv", nullValue="Hyukjin Kwon")
+    .csv(f"{bronze_folder_path}/{v_file_date}/language.csv")
 
 display(languages_df.limit(5))
 
@@ -129,8 +131,8 @@ from pyspark.sql.functions import current_timestamp, lit
 
 # DBTITLE 1,Agrega Columnas forma 1
 languages_final_df = languages_renamed_df \
-    .withColumn("ingestion_date", current_timestamp()) \
-    .withColumn("environment", lit(v_environment))
+    .withColumn("environment", lit(v_environment)) \
+    .withColumn("file_date", lit(v_file_date) )
 
 
 #display(languages_final_df.limit(5))
@@ -146,13 +148,13 @@ languages_final_df = languages_renamed_df \
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ####Paso 5 - Escribir datos en el datalake en formato parquet
+# MAGIC ####Paso 5 - Escribir datos en el datalake en formato parquet y delta en la database
 
 # COMMAND ----------
 
-languages_final_df.write \
-    .mode("overwrite") \
-    .parquet(f"{silver_folder_path}/languages")
+# languages_final_df.write \
+#     .mode("overwrite") \
+#     .parquet(f"{silver_folder_path}/{v_file_date}/languages")
 
 # COMMAND ----------
 

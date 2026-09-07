@@ -9,14 +9,19 @@
 
 # COMMAND ----------
 
+# MAGIC %run "../includes/configuration"
+
+# COMMAND ----------
+
 # DBTITLE 1,Widget p_environment
 dbutils.widgets.text("p_environment","production")
-
+v_environment = dbutils.widgets.get("p_environment")
 
 # COMMAND ----------
 
 # DBTITLE 1,Get p_environment
-v_environment = dbutils.widgets.get("p_environment")
+dbutils.widgets.text("p_file_date","2024-12-16")
+v_file_date = dbutils.widgets.get("p_file_date")
 
 # COMMAND ----------
 
@@ -44,9 +49,9 @@ genres_schema = StructType([
 genres_df = spark.read \
     .option("header", True) \
     .schema(genres_schema) \
-    .csv("abfss://bronze@moviehistory2.dfs.core.windows.net/genre.csv")
+    .csv(f"{bronze_folder_path}/{v_file_date}/genre.csv")
 
-display(genres_df.limit(5))
+#display(genres_df.limit(5))
 
 # COMMAND ----------
 
@@ -85,7 +90,7 @@ from pyspark.sql.functions import col, lit
 
 genres_selected_df = genres_df.select(col("genreId"), col("genreName"))
 
-display(genres_selected_df.limit(5))
+#display(genres_selected_df.limit(5))
 
 # COMMAND ----------
 
@@ -108,7 +113,7 @@ genres_renamed_df = genres_selected_df \
     .withColumnRenamed("genreId", "genre_id") \
     .withColumnRenamed("genreName", "genre_name")
 
-display(genres_renamed_df.limit(5))
+#display(genres_renamed_df.limit(5))
 
 # COMMAND ----------
 
@@ -125,10 +130,10 @@ from pyspark.sql.functions import current_timestamp, lit
 
 # DBTITLE 1,Agrega Columnas forma 1
 genres_final_df = genres_renamed_df \
-    .withColumn("ingestion_date", current_timestamp()) \
-    .withColumn("environment", lit(v_environment))
+    .withColumn("environment", lit(v_environment)) \
+    .withColumn("file_date", lit(v_file_date)) 
 
-display(genres_final_df.limit(5))
+#display(genres_final_df.limit(5))
 
 # COMMAND ----------
 
@@ -141,24 +146,24 @@ display(genres_final_df.limit(5))
 
 # DBTITLE 1,Paso 5 header
 # MAGIC %md
-# MAGIC ####Paso 5 - Escribir datos en el datalake en formato parquet
+# MAGIC ####Paso 5 - Escribir datos en el datalake en formato parquet y tabla delta
 
 # COMMAND ----------
 
 # DBTITLE 1,Escritura en Silver
-genres_final_df.write.mode("overwrite").parquet("abfss://silver@moviehistory2.dfs.core.windows.net/genres")
+#genres_final_df.write.mode("overwrite").parquet("abfss://silver@moviehistory2.dfs.core.windows.net/genres")
 
 # COMMAND ----------
 
-# DBTITLE 1,Verificar archivos escritos
-# MAGIC %fs
-# MAGIC ls abfss://silver@moviehistory2.dfs.core.windows.net/genres
+genres_final_df.write \
+    .mode("overwrite") \
+    .format("delta") \
+    .saveAsTable(f"{catalogo}.{schema_silver}.genres")
 
 # COMMAND ----------
 
-# DBTITLE 1,Leer parquet desde Silver
-df = spark.read.parquet("abfss://silver@moviehistory2.dfs.core.windows.net/genres")
-display(df.limit(5))
+# MAGIC %sql
+# MAGIC SELECT * FROM moviehistory.movie_silver.genres
 
 # COMMAND ----------
 

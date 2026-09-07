@@ -8,12 +8,16 @@
 
 # COMMAND ----------
 
-# DBTITLE 1,Widget p_environment
+# DBTITLE 1,Widget parametros
 dbutils.widgets.text("p_environment","")
+v_environment = dbutils.widgets.get("p_environment")
+
+dbutils.widgets.text("p_file_date","")
+v_file_date = dbutils.widgets.get("p_file_date")
 
 # COMMAND ----------
 
-v_environment = dbutils.widgets.get("p_environment")
+
 
 # COMMAND ----------
 
