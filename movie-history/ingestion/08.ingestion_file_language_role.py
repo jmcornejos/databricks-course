@@ -1,7 +1,6 @@
 # Databricks notebook source
 # /// script
 # [tool.databricks.environment]
-# base_environment = "databricks_ai_v5"
 # environment_version = "5"
 # ///
 # MAGIC %md
@@ -9,19 +8,20 @@
 
 # COMMAND ----------
 
-# MAGIC %run "../includes/configuration"
-
-# COMMAND ----------
-
 # DBTITLE 1,Widget p_environment
 dbutils.widgets.text("p_environment","production")
 v_environment = dbutils.widgets.get("p_environment")
 
+dbutils.widgets.text("p_file_date","")
+v_file_date = dbutils.widgets.get("p_file_date")
+
 # COMMAND ----------
 
-# DBTITLE 1,Get p_environment
-dbutils.widgets.text("p_file_date","2024-12-16")
-v_file_date = dbutils.widgets.get("p_file_date")
+# MAGIC %run "../includes/configuration"
+
+# COMMAND ----------
+
+# MAGIC %run "../includes/common_functions"
 
 # COMMAND ----------
 

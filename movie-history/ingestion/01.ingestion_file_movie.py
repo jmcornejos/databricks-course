@@ -17,10 +17,6 @@ v_file_date = dbutils.widgets.get("p_file_date")
 
 # COMMAND ----------
 
-
-
-# COMMAND ----------
-
 # MAGIC %run "../includes/configuration"
 
 # COMMAND ----------
@@ -65,7 +61,7 @@ movie_schema = StructType([
 movie_df = spark.read \
     .option("header", True) \
     .schema(movie_schema) \
-    .csv(f"{bronze_folder_path}/movie.csv", nullValue="Hyukjin Kwon")
+    .csv(f"{bronze_folder_path}/{v_file_date}/movie.csv", nullValue="Hyukjin Kwon")
 
 #display(movie_df.limit(5))
 
@@ -146,7 +142,8 @@ from pyspark.sql.functions import current_timestamp, lit
 
 # DBTITLE 1,Agrega Columnas forma 1
 movies_final_df = add_ingestion_date(movies_renamed_df) \
-    .withColumn("environment", lit(v_environment))
+    .withColumn("environment", lit(v_environment)) \
+    .withColumn("file_date", lit(v_file_date))
 
 #display(movies_final_df.limit(5))
 
@@ -161,33 +158,90 @@ movies_final_df = add_ingestion_date(movies_renamed_df) \
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ####Paso 5 - Escribir datos en el datalake en formato paruet
+# MAGIC ####Paso 5 - Escribir datos en el datalake en formato parquet
 
 # COMMAND ----------
 
-movies_final_df.write \
-    .mode("overwrite") \
-    .parquet(f"{silver_folder_path}/movies")
+# 1. Activar la partición dinámica en la sesión de Spark
+# NO SE PUEDE UTILIZAR CON SEVERLESS
+#spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+
+# COMMAND ----------
+
+# movies_final_df.write \
+#      .mode("append") \
+#      .partitionBy("file_date") \
+#      .parquet(f"{silver_folder_path}/movies")
 
 
+
+# COMMAND ----------
+
+# 1. Definir la partición que vas a modificar
+# v_file_date
+
+# 2. Leer los datos actuales excluyendo la partición que vas a sobrescribir
+df_existente = spark.read.parquet(f"{silver_folder_path}/movies") \
+    .filter(f"file_date != '{v_file_date}'")
+
+# 3. Preparar tus nuevos datos para esa partición
+# movies_final_df
+
+# 4. Unir los datos viejos (sin la partición) con los nuevos
+df_final = df_existente.union(movies_final_df)
+
+# 5. Sobrescribir toda la tabla (pero solo habrás cambiado esa partición)
+df_final.write \
+     .mode("overwrite") \
+     .partitionBy("file_date") \
+     .parquet(f"{silver_folder_path}/movies")
 
 # COMMAND ----------
 
 df = spark.read.parquet(f"{silver_folder_path}/movies")
-display(df.limit(5))
+display(df.groupBy("file_date").count())
 
 # COMMAND ----------
 
-movies_final_df.write \
-    .mode("overwrite") \
-    .format("delta") \
-    .saveAsTable(f"{catalogo}.{schema_silver}.movies")
+# DBTITLE 1,Alternativa 0 para sobreescribir particion
+#spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
 
+#movies_final_df.write \
+#     .mode("overwrite") \
+#     .format("delta") \
+#     .partitionBy("file_date") \
+#     .saveAsTable(f"{catalogo}.{schema_silver}.movies")
+
+# COMMAND ----------
+
+# DBTITLE 1,Alternativa 1 para sobreescribir particion
+# if spark.catalog.tableExists(f"{catalogo}.{schema_silver}.movies"):
+#     spark.sql(f"""
+#         DELETE FROM {catalogo}.{schema_silver}.movies
+#         WHERE file_date = '{v_file_date}' 
+#     """)
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Alternativa 2 (igual que la 1 pero en una funcion)
+delete_partition(f"{catalogo}.{schema_silver}.movies","file_date", v_file_date).show()
+
+# COMMAND ----------
+
+# DBTITLE 1,escribe la tabla delta modo append
+movies_final_df.write \
+    .mode("append") \
+    .format("delta") \
+    .partitionBy("file_date") \
+    .saveAsTable(f"{catalogo}.{schema_silver}.movies")
 
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC select * from moviehistory.movie_silver.movies
+# MAGIC select file_date,count(1) 
+# MAGIC from moviehistory.movie_silver.movies
+# MAGIC group by file_date
 
 # COMMAND ----------
 

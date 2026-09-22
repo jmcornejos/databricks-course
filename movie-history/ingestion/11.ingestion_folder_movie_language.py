@@ -1,23 +1,30 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC ### Ingesta del archivo "movie_language.json" (archivo multilinea)
 
 # COMMAND ----------
 
+# DBTITLE 1,Parametros
+dbutils.widgets.text("p_environment","production")
+v_environment = dbutils.widgets.get("p_environment")
+
+dbutils.widgets.text("p_file_date","")
+v_file_date = dbutils.widgets.get("p_file_date")
+
+
+# COMMAND ----------
+
+# DBTITLE 1,configuraciones
 # MAGIC %run "../includes/configuration"
 
 # COMMAND ----------
 
-# DBTITLE 1,Widget p_environment
-dbutils.widgets.text("p_environment","production")
-v_environment = dbutils.widgets.get("p_environment")
-
-
-# COMMAND ----------
-
-# DBTITLE 1,Widget fecha
-dbutils.widgets.text("p_file_date","2024-12-16")
-v_file_date = dbutils.widgets.get("p_file_date")
+# DBTITLE 1,funciones comunes
+# MAGIC %run "../includes/common_functions"
 
 # COMMAND ----------
 
@@ -66,10 +73,10 @@ from pyspark.sql.functions import current_timestamp, lit, concat, col
 movies_languages_renamed_df = movies_languages_df \
     .withColumnRenamed("movieId", "movie_id") \
     .withColumnRenamed("languageId", "language_id") \
-    .withColumn("ingestion_date", current_timestamp()) \
-    .withColumn("environment", lit(v_environment)) 
+    .withColumn("environment", lit(v_environment)) \
+    .withColumn("file_date", lit(v_file_date)) 
 
-display(movies_languages_renamed_df.limit(10))
+#display(movies_languages_renamed_df.limit(10))
 
 
 
@@ -88,7 +95,7 @@ display(movies_languages_renamed_df.limit(10))
 #    .drop(col("languageRoleId")) \
 
 movies_languages_final_df = movies_languages_renamed_df \
-    .select("movie_id", "language_id", "ingestion_date", "environment" )
+    .select("movie_id", "language_id", "file_date", "environment" )
 
 #display(movies_languages_final_df)
 
@@ -100,12 +107,29 @@ movies_languages_final_df = movies_languages_renamed_df \
 
 # COMMAND ----------
 
-movies_languages_final_df.write.mode("overwrite").parquet("abfss://silver@moviehistory2.dfs.core.windows.net/movies_languages")
+#movies_languages_final_df.write.mode("overwrite").parquet("abfss://silver@moviehistory2.dfs.core.windows.net/movies_languages")
 
 # COMMAND ----------
 
+# DBTITLE 1,Borra particion
+delete_partition(f"{catalogo}.{schema_silver}.movies_languages","file_date", v_file_date)
 
-display(spark.read.parquet("abfss://silver@moviehistory2.dfs.core.windows.net/movies_languages"))
+# COMMAND ----------
+
+# DBTITLE 1,Escribe en tabla delta
+movies_languages_final_df.write \
+    .mode("append") \
+    .format("delta") \
+    .partitionBy("file_date") \
+    .saveAsTable(f"{catalogo}.{schema_silver}.movies_languages")
+
+# COMMAND ----------
+
+# MAGIC
+# MAGIC %sql
+# MAGIC select file_date,count(1) 
+# MAGIC from moviehistory.movie_silver.movies_languages
+# MAGIC group by file_date
 
 # COMMAND ----------
 

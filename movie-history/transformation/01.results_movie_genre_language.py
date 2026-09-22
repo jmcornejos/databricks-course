@@ -8,27 +8,40 @@
 
 # COMMAND ----------
 
+dbutils.widgets.text("p_file_date","2024-12-16")
+v_file_date = dbutils.widgets.get("p_file_date")
+
+# COMMAND ----------
+
 # MAGIC %run "../includes/configuration"
 
 # COMMAND ----------
 
-movies_df = spark.read.parquet(f"{silver_folder_path}/movies")
+# MAGIC %run "../includes/common_functions"
 
 # COMMAND ----------
 
-movies_languages_df = spark.read.parquet(f"{silver_folder_path}/movies_languages")
+movies_df = spark.read.table(f"{catalogo}.{schema_silver}.movies") \
+    .filter(f"file_date = '{v_file_date}'") 
+            
 
 # COMMAND ----------
 
-languages_df = spark.read.parquet(f"{silver_folder_path}/languages")
+movies_languages_df = spark.read.table(f"{catalogo}.{schema_silver}.movies_languages")\
+    .filter(f"file_date = '{v_file_date}'")
 
 # COMMAND ----------
 
-genres_df = spark.read.parquet(f"{silver_folder_path}/genres")
+languages_df = spark.read.table(f"{catalogo}.{schema_silver}.languages")
 
 # COMMAND ----------
 
-movies_genres_df = spark.read.parquet(f"{silver_folder_path}/movies_genres")
+genres_df = spark.read.table(f"{catalogo}.{schema_silver}.genres")
+
+# COMMAND ----------
+
+movies_genres_df = spark.read.table(f"{catalogo}.{schema_silver}.movies_genres")\
+    .filter(f"file_date = '{v_file_date}'")
 
 
 
@@ -95,9 +108,7 @@ results_movies_genres_languages = movies_filter_df.join(languages_movies_languag
                                     movies_filter_df.movie_id == genres_movies_genres_df.movie_id,
                                     "inner")
                                 
-                                                    
-display(results_movies_genres_languages)
-                                                   
+                                                                                                   
 
 # COMMAND ----------
 
@@ -106,13 +117,13 @@ display(results_movies_genres_languages)
 
 # COMMAND ----------
 
-from pyspark.sql.functions import current_timestamp,desc,asc
+from pyspark.sql.functions import current_timestamp,desc,asc,lit
 
 # COMMAND ----------
 
 results_df = results_movies_genres_languages \
         .select("title","duration_time","release_date","vote_average","language_name","genre_name") \
-        .withColumn("created_date", current_timestamp())
+        .withColumn("created_date", lit(v_file_date))
 
 #display(results_df)
 
@@ -139,25 +150,25 @@ results_order_by_dataframe = results_df.orderBy("release_date",desc=True)
 
 # COMMAND ----------
 
+# DBTITLE 1,Borra particion
+delete_partition(f"{catalogo}.{schema_gold}.results_movie_genre_language","created_date", v_file_date)
+
+# COMMAND ----------
+
 # DBTITLE 1,como archivo parquet
 results_order_by_dataframe.write \
-    .mode("overwrite") \
-    .parquet(f"{gold_folder_path}/results_movie_genre_language")
+    .mode("append") \
+    .format("delta") \
+    .partitionBy("created_date") \
+    .saveAsTable(f"{catalogo}.{schema_gold}.results_movie_genre_language")
 
 
 # COMMAND ----------
 
 # DBTITLE 1,como tabla delta
-results_order_by_dataframe.write \
-    .mode("overwrite") \
-    .format("delta") \
-    .saveAsTable(f"{catalogo}.{schema_gold}.results_movie_genre_language")
-
-# COMMAND ----------
-
 # MAGIC %sql
-# MAGIC select * from moviehistory.movie_silver.results_movie_genre_language
+# MAGIC select * from moviehistory.movie_gold.results_movie_genre_language
 
 # COMMAND ----------
 
-display(spark.read.parquet(f"{gold_folder_path}/results_movie_genre_language"))
+dbutils.notebook.exit("OK")

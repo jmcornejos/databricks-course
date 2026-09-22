@@ -1,17 +1,30 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC ### Ingesta de la caperta "production_company" (archivo multilinea)
 
 # COMMAND ----------
 
-# DBTITLE 1,Widget p_environment
+# DBTITLE 1,Parametros
 dbutils.widgets.text("p_environment","production")
+v_environment = dbutils.widgets.get("p_environment")
+
+dbutils.widgets.text("p_file_date","")
+v_file_date = dbutils.widgets.get("p_file_date")
 
 
 # COMMAND ----------
 
-# DBTITLE 1,Get p_environment
-v_environment = dbutils.widgets.get("p_environment")
+# DBTITLE 1,Configuraciones
+# MAGIC %run "../includes/configuration"
+
+# COMMAND ----------
+
+# DBTITLE 1,Funciones comunes
+# MAGIC %run "../includes/common_functions"
 
 # COMMAND ----------
 
@@ -37,7 +50,7 @@ production_company_schema = StructType(fields=[
 
 production_company_df = spark.read \
     .schema(production_company_schema) \
-    .csv("abfss://bronze@moviehistory2.dfs.core.windows.net/production_company/")
+    .csv(f"{bronze_folder_path}/{v_file_date}/production_company/")
 
 #display(production_company_df)
 
@@ -58,10 +71,10 @@ from pyspark.sql.functions import current_timestamp, lit, concat, col
 productions_companies_final_df = production_company_df \
     .withColumnRenamed("companyId", "company_id") \
     .withColumnRenamed("companyName", "company_name") \
-    .withColumn("ingestion_date", current_timestamp()) \
-    .withColumn("environment", lit(v_environment)) 
-
-#display(productions_companies_final_df)
+    .withColumn("environment", lit(v_environment)) \
+    .withColumn("file_date", lit(v_file_date)) 
+    
+    #display(productions_companies_final_df)
 
 
 
@@ -84,12 +97,30 @@ productions_companies_final_df = production_company_df \
 
 # COMMAND ----------
 
-productions_companies_final_df.write.mode("overwrite").parquet("abfss://silver@moviehistory2.dfs.core.windows.net/productions_companies")
+# DBTITLE 1,Escribir parquet en ADLS
+#productions_companies_final_df.write.mode("overwrite").parquet("abfss://silver@moviehistory2.dfs.core.windows.net/productions_companies")
 
 # COMMAND ----------
 
+# DBTITLE 1,Borra particion
+delete_partition(f"{catalogo}.{schema_silver}.productions_companies","file_date", v_file_date)
 
-#display(spark.read.parquet("abfss://silver@moviehistory2.dfs.core.windows.net/productions_companies"))
+# COMMAND ----------
+
+# DBTITLE 1,Escribir particion en tabla delta
+productions_companies_final_df.write \
+    .mode("append") \
+    .format("delta") \
+    .partitionBy("file_date") \
+    .saveAsTable(f"{catalogo}.{schema_silver}.productions_companies")
+
+# COMMAND ----------
+
+# MAGIC
+# MAGIC %sql
+# MAGIC select file_date,count(1) 
+# MAGIC from moviehistory.movie_silver.productions_companies
+# MAGIC group by file_date
 
 # COMMAND ----------
 
