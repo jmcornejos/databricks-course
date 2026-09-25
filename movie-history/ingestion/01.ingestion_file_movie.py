@@ -61,7 +61,7 @@ movie_schema = StructType([
 movie_df = spark.read \
     .option("header", True) \
     .schema(movie_schema) \
-    .csv(f"{bronze_folder_path}/{v_file_date}/movie.csv", nullValue="Hyukjin Kwon")
+    .csv(f"{bronze_folder_path}/{v_file_date}/movie.csv", nullValue="")
 
 #display(movie_df.limit(5))
 
@@ -168,6 +168,7 @@ movies_final_df = add_ingestion_date(movies_renamed_df) \
 
 # COMMAND ----------
 
+# DBTITLE 1,Escribe en adls modo append
 # movies_final_df.write \
 #      .mode("append") \
 #      .partitionBy("file_date") \
@@ -177,29 +178,25 @@ movies_final_df = add_ingestion_date(movies_renamed_df) \
 
 # COMMAND ----------
 
+# DBTITLE 1,Actualizar solo una particion en adls
 # 1. Definir la partición que vas a modificar
 # v_file_date
 
 # 2. Leer los datos actuales excluyendo la partición que vas a sobrescribir
-df_existente = spark.read.parquet(f"{silver_folder_path}/movies") \
-    .filter(f"file_date != '{v_file_date}'")
+#df_existente = spark.read.parquet(f"{silver_folder_path}/movies") \
+#    .filter(f"file_date != '{v_file_date}'")
 
 # 3. Preparar tus nuevos datos para esa partición
 # movies_final_df
 
 # 4. Unir los datos viejos (sin la partición) con los nuevos
-df_final = df_existente.union(movies_final_df)
+#df_final = df_existente.union(movies_final_df)
 
 # 5. Sobrescribir toda la tabla (pero solo habrás cambiado esa partición)
-df_final.write \
-     .mode("overwrite") \
-     .partitionBy("file_date") \
-     .parquet(f"{silver_folder_path}/movies")
-
-# COMMAND ----------
-
-df = spark.read.parquet(f"{silver_folder_path}/movies")
-display(df.groupBy("file_date").count())
+#df_final.write \
+#     .mode("overwrite") \
+#     .partitionBy("file_date") \
+#     .parquet(f"{silver_folder_path}/movies")
 
 # COMMAND ----------
 
@@ -221,17 +218,48 @@ display(df.groupBy("file_date").count())
 #         WHERE file_date = '{v_file_date}' 
 #     """)
 
+#movies_final_df.write \
+#     .mode("overwrite") \
+#     .format("delta") \
+#     .partitionBy("file_date") \
+#     .saveAsTable(f"{catalogo}.{schema_silver}.movies")
+
 
 # COMMAND ----------
 
-# DBTITLE 1,Alternativa 2 (igual que la 1 pero en una funcion)
-delete_partition(f"{catalogo}.{schema_silver}.movies","file_date", v_file_date).show()
+# DBTITLE 1,Alternativa 2 (borrado igual que la 1 pero en una funcion)
+#delete_partition(f"{catalogo}.{schema_silver}.movies","file_date", v_file_date).show()
 
 # COMMAND ----------
 
-# DBTITLE 1,escribe la tabla delta modo append
-movies_final_df.write \
-    .mode("append") \
+# DBTITLE 1,Alternativa 2 - escribe la tabla delta modo append
+#movies_final_df.write \
+#    .mode("append") \
+#    .format("delta") \
+#    .partitionBy("file_date") \
+#    .saveAsTable(f"{catalogo}.{schema_silver}.movies")
+
+# COMMAND ----------
+
+# DBTITLE 1,alternativa 3 - escribe particion con MERGE
+
+from delta.tables import DeltaTable
+
+if spark.catalog.tableExists(f"{catalogo}.{schema_silver}.movies"):
+
+    deltaTable = DeltaTable.forName(spark, f"{catalogo}.{schema_silver}.movies")
+
+    deltaTable.alias("tgt") \
+    .merge(
+        movies_final_df.alias("src"),
+        "tgt.movie_id = src.movie_id AND tgt.file_date = src.file_date"
+    ) \
+    .whenMatchedUpdateAll() \
+    .whenNotMatchedInsertAll() \
+    .execute()
+else:
+    movies_final_df.write \
+    .mode("overwrite") \
     .format("delta") \
     .partitionBy("file_date") \
     .saveAsTable(f"{catalogo}.{schema_silver}.movies")
@@ -247,3 +275,35 @@ movies_final_df.write \
 
 # DBTITLE 1,Exit notebook
 dbutils.notebook.exit("success")
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC with temp as (
+# MAGIC select ID_Producto_FK,fecha_venta,
+# MAGIC try_sum(Total_Venta) over (partition by ID_Producto_FK) as Tota_Acumulado,
+# MAGIC row_number() over (partition by ID_Producto_FK order by fecha_venta desc) as rown
+# MAGIC from catalogo.ventas.fact_ventas
+# MAGIC )
+# MAGIC select * from temp where rown = 1
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC with temp as (
+# MAGIC select ID_Producto_FK,fecha_venta,
+# MAGIC try_sum(Total_Venta) over (partition by ID_Producto_FK order by fecha_venta) as Tota_Acumulado,
+# MAGIC row_number() over (partition by ID_Producto_FK order by fecha_venta desc) as rown
+# MAGIC from catalogo.ventas.fact_ventas
+# MAGIC )
+# MAGIC select * from temp where rown=1
+# MAGIC
+# MAGIC
+# MAGIC
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select ID_Producto_FK,fecha_venta,Total_Venta from catalogo.ventas.fact_ventas
+# MAGIC order by ID_Producto_FK,fecha_venta asc

@@ -167,7 +167,9 @@ results_order_by_dataframe.write \
 
 # DBTITLE 1,como tabla delta
 # MAGIC %sql
-# MAGIC select * from moviehistory.movie_gold.results_movie_genre_language
+# MAGIC select created_date,count(1) 
+# MAGIC from moviehistory.movie_gold.results_movie_genre_language
+# MAGIC group by created_date
 
 # COMMAND ----------
 
